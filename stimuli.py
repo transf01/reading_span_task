@@ -29,9 +29,11 @@ class Stimulus():
 
 
 class Stimuli():
-    def __init__(self):
+    def __init__(self, groups=None):
         self.raw_data = {}
-        self.groups = ['oo', 'os', 'ss', 'so']
+        self.groups = groups
+        if self.groups is None:
+            self.groups = ['oo', 'os', 'ss', 'so']
         self.trial_index = 0
         self.sentence_count = 3
         for group in self.groups:

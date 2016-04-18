@@ -18,15 +18,30 @@ from stimuli import Stimuli
 from trial import Trial, WordPosition
 import os
 
+class TestExperimentEndHandler():
+    intro = '연습이 모두 종료되었습니다.\n\n\n' \
+            '스페이스바를 누르면 본 실험이 시작됩니다'
+
+    def __init__(self, update, end_callback):
+        update(TestExperimentEndHandler.intro)
+        self.end_callback = end_callback
+
+    def handle_keyboard(self, keycode):
+        if keycode[1] is not 'spacebar':
+            return
+        self.end_callback()
+
 
 class ExperimentEndHandler():
     intro = "모든 실험이 종료되었습니다"
 
-    def __init__(self, update):
+    def __init__(self, update, end_callback):
+        self.end_callback = end_callback
         update(ExperimentEndHandler.intro)
 
     def handle_keyboard(self, keycode):
         print("---end---")
+        self.end_callback()
 
 
 class BlockEndHandler():
@@ -40,8 +55,8 @@ class BlockEndHandler():
 
 
 class SentenceHandler():
-    intro = "스페이스바를 누르면 문장이 나옵니다. \n\n\n" \
-            "다음 문장을 읽기 위해서는 스페이스바를 누르세요"
+    intro = "화면에 나오는 문장을 모두 소리내어 읽으세요. \n\n\n" \
+            "다 읽고 스페이스바를 누르면 새로운 문장이 나옵니다"
 
     def __init__(self, sentences, update, end_callback):
         self.sentences = sentences
@@ -75,19 +90,19 @@ class WordHandler():
         self.db = db
 
     def handle_keyboard(self, keycode):
-        if not self.words:
-            self.end_callback()
-            return
-
         #122:z    47:/
         if keycode[0] is not 122 and keycode[0] is not 47:
             return
 
         if self.current_word is not None:
-            dt = round((datetime.now() - self.update_time).microseconds/1000)
+            dt = round((datetime.now() - self.update_time).total_seconds() * 1000.0)
             self.current_word.set_response(keycode, dt)
             if self.db is not None:
                 self.db.add_response(self.current_word)
+
+        if not self.words:
+            self.end_callback()
+            return
 
         self.current_word = self.words.pop()
         self.update(self.current_word.text)
@@ -95,13 +110,14 @@ class WordHandler():
 
 
 class TrialHandler():
-    def __init__(self, db, update):
+    def __init__(self, db, update, end_callback, groups=None):
         self.db = db
-        self.stimuli = Stimuli()
+        self.stimuli = Stimuli(groups)
         self.update = update
         self.sentence_count = 3
         self.trial = Trial(self.stimuli.get_chunk(self.sentence_count), self.stimuli.get_shuffled_groups())
         self.start_sentence_task()
+        self.end_callback = end_callback
 
     def handle_keyboard(self, keycode):
         self.handler.handle_keyboard(keycode)
@@ -119,7 +135,7 @@ class TrialHandler():
                 self.sentence_count = 3
                 chunk = self.stimuli.get_chunk(self.sentence_count)
                 if chunk is None:
-                    self.handler = ExperimentEndHandler(self.update)
+                    self.handler = ExperimentEndHandler(self.update, self.end_callback)
                     return
                 else:
                     self.handler = BlockEndHandler(self.update, self.start_sentence_task)
@@ -131,11 +147,26 @@ class TrialHandler():
         self.start_sentence_task()
 
 
+class TestTrialHandler(TrialHandler):
+    def __init__(self, update, end_callback):
+        self.groups= ['test']
+        self.end_callback = end_callback
+        super(TestTrialHandler, self).__init__(None, update, end_callback, self.groups)
+
+    def next_task(self):
+        chunk = self.stimuli.get_chunk(self.sentence_count)
+        if chunk is None:
+            self.handler = TestExperimentEndHandler(self.update, self.end_callback)
+            return
+        self.trial = Trial(chunk, self.groups)
+        self.start_sentence_task()
+
 
 class KeyLabel(Label):
     def __init__(self, db, **kwargs):
         super(KeyLabel, self).__init__(**kwargs)
-        self.trial_handler = TrialHandler(db, self.update)
+        self.db = db
+        self.trial_handler = TestTrialHandler(self.update, self.end_test_trial)
 
     def bind_keyboard(self):
         self._keyboard = Window.request_keyboard(self._keyboard_closed, self, 'text')
@@ -149,6 +180,12 @@ class KeyLabel(Label):
 
     def update(self, text):
         self.text = text
+
+    def end_test_trial(self):
+        self.trial_handler = TrialHandler(self.db, self.update, self.end_all_trial)
+
+    def end_all_trial(self):
+        pass
 
 
 class SignInPopup(Popup):

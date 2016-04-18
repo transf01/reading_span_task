@@ -27,7 +27,6 @@ class Word:
                 is_correct = True
         self.is_correct_response = is_correct
         self.rt = rt
-        print(self.is_correct_response, self.rt)
 
 class Trial:
     def __init__(self, chunk, groups):

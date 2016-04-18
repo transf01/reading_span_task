@@ -32,3 +32,8 @@ class Database():
     def add_response(self, word):
         self.cursor.execute("insert into response values('%s', '%s', '%s', '%s', %d, '%s', '%s')"%(word.group, word.index, word.position, word.text, word.rt, word.is_correct_response, self.user_id))
         self.db.commit()
+
+    def clear(self):
+        self.cursor.execute("drop table user")
+        self.cursor.execute("drop table response")
+        self.make_table()

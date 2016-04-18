@@ -64,9 +64,15 @@ class Test(TestCase):
         elif self.exp_state == ExperimentStatus.experiment_end:
             self.assertEqual(ExperimentEndHandler.intro, text)
 
+    def trial_end_callback(self):
+        self.traial_all_end = True
+
     def test_experiment(self):
+        self.traial_all_end = False
         self.exp_state = ExperimentStatus.enter
-        trial_handler = TrialHandler(None, self.check_trial_update)
+        db = Database('test.db')
+        db.clear()
+        trial_handler = TrialHandler(db, self.check_trial_update, self.trial_end_callback)
         for block_count in range(0, 2):
             for self.chunk_count in range(3, 7):
                 for group in range(0, 4):
@@ -74,9 +80,9 @@ class Test(TestCase):
                     self.word_count = 0
                     self.exp_state = ExperimentStatus.sentence
                     for x in range(0, self.chunk_count):
-                        trial_handler.handle_keyboard('spacebar')
+                        trial_handler.handle_keyboard((32, 'spacebar'))
                     self.exp_state = ExperimentStatus.word_intro
-                    trial_handler.handle_keyboard('spacebar')
+                    trial_handler.handle_keyboard((32, 'spacebar'))
                     self.exp_state = ExperimentStatus.word
                     for x in range(0, self.chunk_count*4):
                         trial_handler.handle_keyboard((122, 'z'))
@@ -85,10 +91,10 @@ class Test(TestCase):
                             self.exp_state = ExperimentStatus.experiment_end
                         else:
                             self.exp_state = ExperimentStatus.block_end
-                        trial_handler.handle_keyboard('spacebar')
+                        trial_handler.handle_keyboard((32, 'spacebar'))
                     self.exp_state = ExperimentStatus.sentence_intro
-                    trial_handler.handle_keyboard('spacebar')
-
+                    trial_handler.handle_keyboard((32, 'spacebar'))
+        self.assertTrue(self.traial_all_end)
 
     def test_stimulus_equality(self):
         a = Stimulus('oo', ['1', 'sentence', 'start', 'middle', 'end', 'non'])
