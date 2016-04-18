@@ -1,32 +1,179 @@
+# coding: utf-8
+import uuid
+from datetime import datetime
+
+from django.forms import TextInput
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
+from kivy.properties import StringProperty, ObjectProperty
 from kivy.uix.button import Button
+from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
+from kivy.uix.popup import Popup
 from kivy.uix.widget import Widget
+
+from database import Database
+from stimuli import Stimuli
+from trial import Trial, WordPosition
+import os
+
+
+class ExperimentEndHandler():
+    intro = "모든 실험이 종료되었습니다"
+
+    def __init__(self, update):
+        update(ExperimentEndHandler.intro)
+
+    def handle_keyboard(self, keycode):
+        print("---end---")
+
+
+class BlockEndHandler():
+    intro = "2분 휴식후 다시 시작해 주세요"
+    def __init__(self, update, end_callback):
+        update(BlockEndHandler.intro)
+        self.end_callback = end_callback
+
+    def handle_keyboard(self, keycode):
+        self.end_callback()
+
+
+class SentenceHandler():
+    intro = "스페이스바를 누르면 문장이 나옵니다. \n\n\n" \
+            "다음 문장을 읽기 위해서는 스페이스바를 누르세요"
+
+    def __init__(self, sentences, update, end_callback):
+        self.sentences = sentences
+        self.update = update
+        self.update(SentenceHandler.intro)
+        self.end_callback = end_callback
+
+    def handle_keyboard(self, keycode):
+        if not self.sentences:
+            self.end_callback()
+            return
+
+        if keycode[1] is not 'spacebar':
+            return
+
+        self.update(self.sentences.pop())
+
+
+class WordHandler():
+    intro = "단어가 하나씩 화면에 나옵니다.\n\n\n" \
+            "방금 읽은 문장들 속에 있었던 단어라면 'Z'를, 없었다면 '/'를 빠르게 눌러 주세요.\n\n\n" \
+            "준비되었으면 'Z'나 '/'중의 하나를 눌러 주세요"
+
+    def __init__(self, words, update, end_callback, db):
+        self.words = words
+        self.update = update
+        self.update(WordHandler.intro)
+        self.end_callback = end_callback
+        self.current_word = None
+        self.update_time = None
+        self.db = db
+
+    def handle_keyboard(self, keycode):
+        if not self.words:
+            self.end_callback()
+            return
+
+        #122:z    47:/
+        if keycode[0] is not 122 and keycode[0] is not 47:
+            return
+
+        if self.current_word is not None:
+            dt = round((datetime.now() - self.update_time).microseconds/1000)
+            self.current_word.set_response(keycode, dt)
+            if self.db is not None:
+                self.db.add_response(self.current_word)
+
+        self.current_word = self.words.pop()
+        self.update(self.current_word.text)
+        self.update_time = datetime.now()
+
+
+class TrialHandler():
+    def __init__(self, db, update):
+        self.db = db
+        self.stimuli = Stimuli()
+        self.update = update
+        self.sentence_count = 3
+        self.trial = Trial(self.stimuli.get_chunk(self.sentence_count), self.stimuli.get_shuffled_groups())
+        self.start_sentence_task()
+
+    def handle_keyboard(self, keycode):
+        self.handler.handle_keyboard(keycode)
+
+    def start_sentence_task(self):
+        self.sentences, self.words = self.trial.get_one_group_data_from_chunk()
+        self.handler = SentenceHandler(self.sentences, self.update, self.start_word_task)
+
+    def start_word_task(self):
+        self.handler = WordHandler(self.words, self.update, self.next_task, self.db)
+
+    def next_task(self):
+        if self.trial.is_end():
+            if self.sentence_count == 6:
+                self.sentence_count = 3
+                chunk = self.stimuli.get_chunk(self.sentence_count)
+                if chunk is None:
+                    self.handler = ExperimentEndHandler(self.update)
+                    return
+                else:
+                    self.handler = BlockEndHandler(self.update, self.start_sentence_task)
+                self.trial = Trial(chunk, self.stimuli.get_shuffled_groups())
+                return
+            else:
+                self.sentence_count += 1
+                self.trial = Trial(self.stimuli.get_chunk(self.sentence_count), self.stimuli.get_shuffled_groups())
+        self.start_sentence_task()
+
 
 
 class KeyLabel(Label):
-    def __init__(self, **kwargs):
+    def __init__(self, db, **kwargs):
         super(KeyLabel, self).__init__(**kwargs)
-        self._keyboard = Window.request_keyboard(
-            self._keyboard_closed, self, 'text')
+        self.trial_handler = TrialHandler(db, self.update)
+
+    def bind_keyboard(self):
+        self._keyboard = Window.request_keyboard(self._keyboard_closed, self, 'text')
         self._keyboard.bind(on_key_down=self._on_keyboard_down)
 
     def _keyboard_closed(self):
         self._keyboard.unbind(on_key_down=self._on_keyboard_down)
-        self._keyboard = None
 
     def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
-        self.text = keycode[1]
-        Clock.schedule_once(self.callback, 5)
+        self.trial_handler.handle_keyboard(keycode)
 
-    def callback(self, dt):
-        self.text = 'timer'
+    def update(self, text):
+        self.text = text
+
+
+class SignInPopup(Popup):
+    pass
+
 
 class TestApp(App):
-    def build(self):
-        label = KeyLabel(text='[color=ff3333]Hello[/color][color=3333ff]World[/color]', markup = True)
-        return label
+    def __init__(self, **kwargs):
+        super(TestApp, self).__init__(**kwargs)
+        self.db = Database()
 
-TestApp().run()
+    def build(self):
+        self.label = KeyLabel(self.db)
+        return self.label
+
+    def on_start(self):
+        super(TestApp, self).on_start()
+        popup = SignInPopup(title='이름과 연락처를 입력해주세요')
+        popup.bind(on_dismiss=self.popup_dismiss)
+        popup.open()
+
+    def popup_dismiss(self, instance):
+        self.label.bind_keyboard()
+        print (instance.user_number.text, instance.user_phone.text)
+        self.db.add_user(uuid.uuid4(), instance.user_number.text, instance.user_phone.text)
+
+if __name__ == "__main__":
+    TestApp().run()

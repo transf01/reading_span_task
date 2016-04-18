@@ -1,7 +1,50 @@
 <KeyLabel>:
+    font_name:'fonts/NanumGothic.ttf'
+    font_size:'20sp'
     canvas.before:
         Color:
             rgb: .6, .6, .6
         Rectangle:
             pos: self.pos
             size: self.size
+
+
+<KoreanLable@Label>
+    font_name:'fonts/NanumGothic.ttf'
+    font_size:'20sp'
+
+<KoreanTextInput@TextInput>
+    multiline:False
+    font_name:'fonts/NanumGothic.ttf'
+    font_size:'20sp'
+
+
+<SignInPopup>
+    user_number: user_number
+    user_phone:user_phone
+    auto_dismiss: False
+    size_hint: .5, .5
+    title_font:'fonts/NanumGothic.ttf'
+    title_size:'20sp'
+    BoxLayout:
+        orientation:'vertical'
+        GridLayout:
+            size_hint: 1, .7
+            rows:2
+            cols:2
+            padding:10
+            spacing:10
+            KoreanLable:
+                text:'학번'
+            KoreanTextInput:
+                id: user_number
+                focus:True
+                input_filter:'int'
+            KoreanLable:
+                text:'전화번호'
+            KoreanTextInput:
+                id: user_phone
+        Button:
+            size_hint:1, .3
+            text: 'OK'
+            on_press:root.dismiss()
