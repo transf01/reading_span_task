@@ -1,6 +1,7 @@
 # coding: utf-8
 import uuid
 from datetime import datetime
+from enum import Enum
 
 from django.forms import TextInput
 from kivy.app import App
@@ -18,6 +19,7 @@ from stimuli import Stimuli
 from trial import Trial, WordPosition
 import os
 
+
 class TestExperimentEndHandler():
     intro = '연습이 모두 종료되었습니다.\n\n\n' \
             '스페이스바를 누르면 본 실험이 시작됩니다'
@@ -30,7 +32,6 @@ class TestExperimentEndHandler():
         if keycode[1] is not 'spacebar':
             return
         self.end_callback()
-
 
 class ExperimentEndHandler():
     intro = "모든 실험이 종료되었습니다"
@@ -90,6 +91,7 @@ class WordHandler():
         self.db = db
 
     def handle_keyboard(self, keycode):
+
         #122:z    47:/
         if keycode[0] is not 122 and keycode[0] is not 47:
             return
@@ -120,14 +122,14 @@ class TrialHandler():
         self.end_callback = end_callback
 
     def handle_keyboard(self, keycode):
-        self.handler.handle_keyboard(keycode)
+        self.current_handler.handle_keyboard(keycode)
 
     def start_sentence_task(self):
         self.sentences, self.words = self.trial.get_one_group_data_from_chunk()
-        self.handler = SentenceHandler(self.sentences, self.update, self.start_word_task)
+        self.current_handler = SentenceHandler(self.sentences, self.update, self.start_word_task)
 
     def start_word_task(self):
-        self.handler = WordHandler(self.words, self.update, self.next_task, self.db)
+        self.current_handler = WordHandler(self.words, self.update, self.next_task, self.db)
 
     def next_task(self):
         if self.trial.is_end():
@@ -135,10 +137,10 @@ class TrialHandler():
                 self.sentence_count = 3
                 chunk = self.stimuli.get_chunk(self.sentence_count)
                 if chunk is None:
-                    self.handler = ExperimentEndHandler(self.update, self.end_callback)
+                    self.current_handler = ExperimentEndHandler(self.update, self.end_callback)
                     return
                 else:
-                    self.handler = BlockEndHandler(self.update, self.start_sentence_task)
+                    self.current_handler = BlockEndHandler(self.update, self.start_sentence_task)
                 self.trial = Trial(chunk, self.stimuli.get_shuffled_groups())
                 return
             else:
@@ -156,7 +158,7 @@ class TestTrialHandler(TrialHandler):
     def next_task(self):
         chunk = self.stimuli.get_chunk(self.sentence_count)
         if chunk is None:
-            self.handler = TestExperimentEndHandler(self.update, self.end_callback)
+            self.current_handler = TestExperimentEndHandler(self.update, self.end_callback)
             return
         self.trial = Trial(chunk, self.groups)
         self.start_sentence_task()

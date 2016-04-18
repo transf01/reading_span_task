@@ -64,15 +64,16 @@ class Test(TestCase):
         elif self.exp_state == ExperimentStatus.experiment_end:
             self.assertEqual(ExperimentEndHandler.intro, text)
 
+        print(text, self.word_count)
+
     def trial_end_callback(self):
         self.traial_all_end = True
 
     def test_experiment(self):
+        self.word_count = 0
         self.traial_all_end = False
         self.exp_state = ExperimentStatus.enter
-        db = Database('test.db')
-        db.clear()
-        trial_handler = TrialHandler(db, self.check_trial_update, self.trial_end_callback)
+        trial_handler = TrialHandler(None, self.check_trial_update, self.trial_end_callback)
         for block_count in range(0, 2):
             for self.chunk_count in range(3, 7):
                 for group in range(0, 4):
@@ -91,9 +92,9 @@ class Test(TestCase):
                             self.exp_state = ExperimentStatus.experiment_end
                         else:
                             self.exp_state = ExperimentStatus.block_end
-                        trial_handler.handle_keyboard((32, 'spacebar'))
+                        trial_handler.handle_keyboard((122, 'z'))
                     self.exp_state = ExperimentStatus.sentence_intro
-                    trial_handler.handle_keyboard((32, 'spacebar'))
+                    trial_handler.handle_keyboard((122, 'z'))
         self.assertTrue(self.traial_all_end)
 
     def test_stimulus_equality(self):
